@@ -41,7 +41,7 @@ export default async function Page() {
             {Object.entries(request.headers ?? {}).map(([k, v], index) => (
               <Fragment key={index}>
                 <div className="col-span-2 md:col-span-1 w-full relative">{k}</div>
-                <div className="col-span-2 md:col-span-1 w-full">{v}</div>
+                <div className="col-span-2 md:col-span-1 w-full break-words text-wrap">{v}</div>
               </Fragment>
             ))}
             {request.method === 'POST' && <div className="col-span-2 flex flex-col mt-4 gap-2">
