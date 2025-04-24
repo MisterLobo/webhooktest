@@ -1,103 +1,112 @@
-import Image from "next/image";
+'use client'
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { deleteRequest, getSessionId } from '@/lib/actions'
+import { requestsCollection } from '@/lib/firebase'
+import { EndpointRequest } from '@/lib/types'
+import { onSnapshot, query, where } from 'firebase/firestore'
+import { useSearchParams } from 'next/navigation'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const search = useSearchParams()
+  const [sessionId, setSessionId] = useState<string>()
+  const [endpointId, setEndpointId] = useState<string>()
+  const [requests, setRequests] = useState<EndpointRequest[]>([])
+  const [copied, setCopied] = useState(false)
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const webhookUrl = useMemo(() => `${process.env.NEXT_PUBLIC_APP_URL}/${sessionId}`, [sessionId])
+
+  useEffect(() => {
+    (async () => {
+      const sessionId = await getSessionId()
+      setSessionId(sessionId)
+      const endpointId = search.get('address') ?? sessionId as string
+      setEndpointId(endpointId)
+    })()
+  }, [])
+
+  useEffect(() => {
+    if (!endpointId) return
+    const q = query(requestsCollection, where('address', '==', endpointId))
+    const unsub = onSnapshot(q, snapshot => {
+      const arr: EndpointRequest[] = []
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added') {
+          const data = {
+            ...change.doc.data(),
+            id: change.doc.id,
+          }
+          arr.push(data)
+        }
+      })
+      setRequests(old => {
+        const newArr = Array.from(old)
+        newArr.push(...arr)
+        return newArr
+      })
+    })
+    return () => {
+      unsub()
+    }
+  }, [endpointId])
+
+  const deleteItem = useCallback((id: string) => {
+    const confirmed = confirm('Are you sure?')
+    if (!confirmed) return
+    setRequests(old => {
+      const index = old.findIndex(req => req.id === id)
+      const arr = Array.from(old)
+      arr.splice(index, 1)
+      return arr
+    })
+    deleteRequest(id)
+  }, [])
+
+  const onClickCopy = useCallback(() => {
+    navigator.clipboard.writeText(webhookUrl)
+    setCopied(true)
+    setTimeout(() => {
+      setCopied(false)
+    }, 1000)
+  }, [webhookUrl])
+
+  return (
+    <div className="bg-muted/50 min-h-[100vh] flex-1 rounded-xl md:min-h-min p-2">
+      <div className="flex flex-col m-2 items-center justify-center h-96 bg-muted gap-2">
+        <h1 className="text-3xl m-2">Your unique webhook URL</h1>
+        <div className="flex flex-row w-full gap-2 items-center justify-center">
+          <Input type="url" readOnly value={`${webhookUrl}`} className="flex max-w-xl" />
+          <Button className="cursor-pointer" onClick={onClickCopy} disabled={copied}>{copied ? 'copied' : 'copy'}</Button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
+      <div className="flex flex-col m-2 gap-4">
+        <h2 className="text-xl">{requests.length} Requests</h2>
+        {requests.map((req, index) => (
+          <div key={index} className="bg-muted p-4">
+            {req.created_at && <div className="flex">{new Date(req.created_at).toUTCString()}</div>}
+            <div className="flex flex-row gap-2 font-bold text-2xl mb-4 items-center">
+              <span>{req.method}</span>
+              <span>{req.id}</span>
+              <Button variant="destructive" className="cursor-pointer" disabled={!req.id} onClick={() => deleteItem(req.id as string)}>Delete</Button>
+            </div>
+            <div className="grid md:grid-cols-2 grid-cols-1 gap-2">
+              <h2 className="col-span-2 text-md text-neutral-400">Headers</h2>
+              {Object.entries(req.headers ?? {}).map(([k, v], index) => (
+                <Fragment key={index}>
+                  <div className="col-span-2 md:col-span-1 w-full relative">{k}</div>
+                  <div className="col-span-2 md:col-span-1 w-full">{v}</div>
+                </Fragment>
+              ))}
+              {req.method === 'POST' && <div className="col-span-2 flex flex-col mt-4 gap-2">
+                <h2 className="text-md text-neutral-400">Payload</h2>
+                <pre className="bg-background p-4 rounded">{ JSON.stringify(req.body, null, 2) }</pre>
+              </div>}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
